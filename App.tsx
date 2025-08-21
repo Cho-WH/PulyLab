@@ -5,8 +5,11 @@ import { analyzeProblem, createChatSession, getApiErrorMessage } from './service
 import ProblemUploader from './components/ProblemUploader';
 import ChatInterface from './components/ChatInterface';
 import LoadingSpinner from './components/LoadingSpinner';
+import ApiKeyModal from './components/ApiKeyModal';
+import { useApiKey } from './context/ApiKeyContext';
 
 function App() {
+  const { apiKey, isValid } = useApiKey();
   const [appState, setAppState] = useState<AppState>(AppState.UPLOAD);
   const [isProMode, setIsProMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -14,6 +17,7 @@ function App() {
   const [isResponding, setIsResponding] = useState(false);
   const [currentProblem, setCurrentProblem] = useState<ProblemInput | null>(null);
   const chatSessionRef = useRef<Chat | null>(null);
+  const [isKeyModalOpen, setKeyModalOpen] = useState(false);
 
   const resetState = () => {
     setAppState(AppState.UPLOAD);
@@ -26,15 +30,21 @@ function App() {
   };
 
   const handleProblemSubmit = useCallback(async (problem: ProblemInput) => {
+    if (!apiKey || !isValid) {
+      setError('API 키가 설정되어 있지 않습니다. 먼저 API 키를 입력해주세요.');
+      setKeyModalOpen(true);
+      setAppState(AppState.ERROR);
+      return;
+    }
     setCurrentProblem(problem);
     setAppState(AppState.ANALYZING);
     setError(null);
     try {
       // 1. Get only the internal solution from the analysis model.
-      const solution = await analyzeProblem(problem, isProMode);
+      const solution = await analyzeProblem(apiKey, problem, isProMode);
 
       // 2. Create the chat session with the solution as its knowledge base.
-      chatSessionRef.current = createChatSession(solution);
+      chatSessionRef.current = createChatSession(apiKey, solution);
 
       // 3. Have the chat model generate the opening message based on its system prompt.
       // This message is a programmatic trigger, not from the user.
@@ -136,6 +146,14 @@ function App() {
     <main className={`bg-gray-100 w-full min-h-screen flex justify-center p-4 ${
         appState === AppState.CHATTING ? 'items-start' : 'items-center'
     }`}>
+      <button
+        onClick={() => setKeyModalOpen(true)}
+        className="fixed bottom-4 right-4 px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg hover:bg-gray-700"
+        aria-label="API 키 설정"
+      >
+        키 설정
+      </button>
+      <ApiKeyModal isOpen={isKeyModalOpen} onClose={() => setKeyModalOpen(false)} />
       {renderContent()}
     </main>
   );

@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-require('dotenv').config();
 const express = require('express');
 const fs = require('fs');
 const axios = require('axios');
@@ -19,20 +18,12 @@ const app = express();
 const port = process.env.PORT || 3000;
 const externalApiBaseUrl = 'https://generativelanguage.googleapis.com';
 const externalWsBaseUrl = 'wss://generativelanguage.googleapis.com';
-// Support either API key env-var variant
-const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+// No environment fallback: client must supply the API key.
 
 const staticPath = path.join(__dirname,'dist');
 const publicPath = path.join(__dirname,'public');
 
-
-if (!apiKey) {
-    // Only log an error, don't exit. The server will serve apps without proxy functionality
-    console.error("Warning: GEMINI_API_KEY or API_KEY environment variable is not set! Proxy functionality will be disabled.");
-}
-else {
-  console.log("API KEY FOUND (proxy will use this)")
-}
+// Always serve the app; proxy requires client-provided key.
 
 // Limit body size to 50mb
 app.use(express.json({ limit: '50mb' }));
@@ -73,7 +64,7 @@ app.use('/api-proxy', async (req, res, next) => {
     }
 
     if (req.body) { // Only log body if it exists
-        console.log("  Request Body (from frontend):", JSON.stringify(req.body, null, 2));
+        console.log("  Request Body received from frontend.");
         
         // --- MODIFICATION START ---
         // The Gemini API expects system_instruction to be an object, not a string.
@@ -94,6 +85,10 @@ app.use('/api-proxy', async (req, res, next) => {
         // --- MODIFICATION END ---
     }
     try {
+        const clientApiKey = req.get('x-goog-Api-key') || req.get('x-goog-api-key') || (req.query && (req.query.key || req.query.api_key));
+        if (!clientApiKey) {
+            return res.status(401).json({ error: 'Missing API key', message: '클라이언트에서 API 키를 제공해야 합니다.' });
+        }
         // Construct the target URL by taking the part of the path after /api-proxy/
         const targetPath = req.url.startsWith('/') ? req.url.substring(1) : req.url;
         const apiUrl = `${externalApiBaseUrl}/${targetPath}`;
@@ -110,7 +105,7 @@ app.use('/api-proxy', async (req, res, next) => {
         }
 
         // Set the actual API key in the appropriate header
-        outgoingHeaders['X-Goog-Api-Key'] = apiKey;
+        outgoingHeaders['X-Goog-Api-Key'] = clientApiKey;
 
         // Set Content-Type from original request if present (for relevant methods)
         if (req.headers['content-type'] && ['POST', 'PUT', 'PATCH'].includes(req.method.toUpperCase())) {
@@ -177,7 +172,7 @@ app.use('/api-proxy', async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('Proxy error before request to target API:', error);
+        console.error('Proxy error before request to target API:', error?.message || error);
         if (!res.headersSent) {
             if (error.response) {
                 const errorData = {
@@ -229,13 +224,7 @@ app.get('/', (req, res) => {
             return res.sendFile(placeholderPath);
         }
 
-        // If API key is not set, serve original HTML without injection
-        if (!apiKey) {
-          console.log("LOG: API key not set. Serving original index.html without script injections.");
-          return res.sendFile(indexPath);
-        }
-
-        // index.html found and apiKey set, inject scripts
+        // Always inject scripts (service worker + WebSocket interceptor)
         console.log("LOG: index.html read successfully. Injecting scripts.");
         let injectedHtml = indexHtmlData;
 
@@ -277,20 +266,21 @@ server.on('upgrade', (request, socket, head) => {
     const pathname = requestUrl.pathname;
 
     if (pathname.startsWith('/api-proxy/')) {
-        if (!apiKey) {
-            console.error("WebSocket proxy: API key not configured. Closing connection.");
-            socket.destroy();
-            return;
-        }
 
         wss.handleUpgrade(request, socket, head, (clientWs) => {
             console.log('Client WebSocket connected to proxy for path:', pathname);
 
             const targetPathSegment = pathname.substring('/api-proxy'.length);
             const clientQuery = new URLSearchParams(requestUrl.search);
-            clientQuery.set('key', apiKey);
+            const clientKey = clientQuery.get('key');
+            if (!clientKey) {
+                console.error('WebSocket proxy: Missing API key in query. Closing.');
+                clientWs.close(1008, 'Missing API key');
+                return;
+            }
+            clientQuery.set('key', clientKey);
             const targetGeminiWsUrl = `${externalWsBaseUrl}${targetPathSegment}?${clientQuery.toString()}`;
-            console.log(`Attempting to connect to target WebSocket: ${targetGeminiWsUrl}`);
+            console.log('Attempting to connect to target WebSocket.');
 
             const geminiWs = new WebSocket(targetGeminiWsUrl, {
                 protocol: request.headers['sec-websocket-protocol'],

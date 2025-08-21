@@ -36,12 +36,14 @@ self.addEventListener('fetch', (event) => {
     const requestUrl = event.request.url;
 
     if (requestUrl.startsWith(TARGET_URL_PREFIX)) {
-      console.log(`Service Worker: Intercepting request to ${requestUrl}`);
+      const safeReq = requestUrl.replace(/(key=)[^&]+/i, '$1REDACTED');
+      console.log(`Service Worker: Intercepting request to ${safeReq}`);
 
       const remainingPathAndQuery = requestUrl.substring(TARGET_URL_PREFIX.length);
       const proxyUrl = `${self.location.origin}/api-proxy${remainingPathAndQuery}`;
 
-      console.log(`Service Worker: Proxying to ${proxyUrl}`);
+      const safeProxy = proxyUrl.replace(/(key=)[^&]+/i, '$1REDACTED');
+      console.log(`Service Worker: Proxying to ${safeProxy}`);
 
       // Construct headers for the request to the proxy
       const newHeaders = new Headers();
@@ -53,6 +55,7 @@ self.addEventListener('fetch', (event) => {
         'Accept',
         'Access-Control-Request-Method',
         'Access-Control-Request-Headers',
+        'X-Goog-Api-Key',
       ];
 
       for (const headerName of headersToCopy) {

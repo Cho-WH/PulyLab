@@ -1,15 +1,11 @@
-import { GoogleGenAI, Chat, GenerateContentResponse, Part } from "@google/genai";
+import { GoogleGenAI, Chat, Part } from "@google/genai";
 import type { ProblemInput } from '../types';
 
-const API_KEY = process.env.API_KEY;
-
-if (!API_KEY) {
-  throw new Error("API_KEY environment variable not set.");
+export function getGenAI(apiKey: string): GoogleGenAI {
+  return new GoogleGenAI({ apiKey });
 }
 
-const ai = new GoogleGenAI({ apiKey: API_KEY });
-
-export async function analyzeProblem(problem: ProblemInput, isProMode: boolean): Promise<string> {
+export async function analyzeProblem(apiKey: string, problem: ProblemInput, isProMode: boolean): Promise<string> {
   const model = isProMode ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
   
   const promptParts: Part[] = [
@@ -30,6 +26,7 @@ export async function analyzeProblem(problem: ProblemInput, isProMode: boolean):
     });
   }
 
+  const ai = getGenAI(apiKey);
   const response = await ai.models.generateContent({
     model,
     contents: { parts: promptParts },
@@ -42,7 +39,7 @@ export async function analyzeProblem(problem: ProblemInput, isProMode: boolean):
   return solutionText;
 }
 
-export function createChatSession(internalSolution: string): Chat {
+export function createChatSession(apiKey: string, internalSolution: string): Chat {
   const systemInstruction = `
 ## 지식 (Knowledge Base)
 이것은 학생에게 절대 보여주지 말고, 학생을 안내하는 데에만 사용해야 할 문제의 전체 풀이입니다:
@@ -51,6 +48,7 @@ ${internalSolution}
 ---
 `;
 
+  const ai = getGenAI(apiKey);
   const chat = ai.chats.create({
     model: 'gemini-2.5-flash',
     config: {

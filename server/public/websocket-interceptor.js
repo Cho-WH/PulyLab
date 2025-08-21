@@ -37,8 +37,7 @@
       }
 
       if (isTarget) {
-        console.log('[WebSocketInterceptor-Proxy] Original WebSocket URL:', url);
-        console.log('[WebSocketInterceptor-Proxy] Redirecting to proxy URL:', newUrlString);
+        console.log('[WebSocketInterceptor-Proxy] Redirecting WebSocket to local proxy.');
       }
 
       // Call the original constructor with potentially modified arguments
@@ -61,5 +60,5 @@
 
   window.WebSocket = new Proxy(originalWebSocket, handler);
 
-  console.log('[WebSocketInterceptor-Proxy] Global WebSocket constructor has been wrapped using Proxy.');
+  console.log('[WebSocketInterceptor-Proxy] WebSocket constructor wrapped.');
 })();
