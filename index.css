@@ -1,0 +1,125 @@
+/*
+ * KaTeX / Tailwind Prose Conflict Fix
+ *
+ * The Tailwind `prose` class resets styles, which can interfere with KaTeX's
+ * HTML-based rendering (`.katex-html`). This causes the raw LaTeX source
+ * to appear next to the correctly rendered MathML version.
+ *
+ * This rule hides the HTML version, relying solely on the browser's native
+ * MathML rendering (`.katex-mathml`). This is the simplest and most stable
+ * solution to prevent duplicate content.
+*/
+.katex-html {
+  display: none !important;
+}
+
+/* --- Modern React-Image-Crop Styles --- */
+
+.ReactCrop__image {
+  max-height: 70vh; /* Give crop image more vertical space */
+}
+
+/* The crop selection area */
+.ReactCrop__crop-selection {
+  /* This creates the dark overlay outside the crop area. */
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7);
+  /* The selection border is a clean, solid white line. */
+  border: 2px solid white;
+
+  /* --- IMPORTANT: Override library defaults to remove "ant march" --- */
+  background-image: none !important;
+  animation: none !important;
+}
+
+/* --- DRAG HANDLES --- */
+
+/* 1. Hide the default drag handles' visual appearance. They are still there for dragging. */
+.ReactCrop__drag-handle {
+  background-color: transparent !important;
+  border: none !important;
+}
+/* We only want corner handles, so hide the side ones completely. */
+.ReactCrop__drag-handle.ord-n,
+.ReactCrop__drag-handle.ord-s,
+.ReactCrop__drag-handle.ord-w,
+.ReactCrop__drag-handle.ord-e {
+  display: none !important;
+}
+
+/* 2. Create custom L-shaped corner handles using pseudo-elements */
+.ReactCrop__drag-handle::before,
+.ReactCrop__drag-handle::after {
+  content: '';
+  display: block;
+  position: absolute;
+  background-color: white;
+  box-shadow: 0 0 3px rgba(0,0,0,0.5); /* Add shadow for better visibility */
+}
+
+/* Define the shape of the L's bars */
+.ReactCrop__drag-handle::before { /* Horizontal bar */
+  width: 16px;
+  height: 3px;
+}
+.ReactCrop__drag-handle::after { /* Vertical bar */
+  width: 3px;
+  height: 16px;
+}
+
+/* 3. Position the L-shapes at each corner, precisely outside the selection border */
+/* Top-left handle (ord-nw) */
+.ReactCrop__drag-handle.ord-nw::before { top: 0; left: 0; }
+.ReactCrop__drag-handle.ord-nw::after  { top: 0; left: 0; }
+/* Top-right handle (ord-ne) */
+.ReactCrop__drag-handle.ord-ne::before { top: 0; right: 0; }
+.ReactCrop__drag-handle.ord-ne::after  { top: 0; right: 0; }
+/* Bottom-left handle (ord-sw) */
+.ReactCrop__drag-handle.ord-sw::before { bottom: 0; left: 0; }
+.ReactCrop__drag-handle.ord-sw::after  { bottom: 0; left: 0; }
+/* Bottom-right handle (ord-se) */
+.ReactCrop__drag-handle.ord-se::before { bottom: 0; right: 0; }
+.ReactCrop__drag-handle.ord-se::after  { bottom: 0; right: 0; }
+
+
+/* --- RULE OF THIRDS GRID --- */
+/* Always visible when a crop selection exists */
+.ReactCrop__crop-selection::before,
+.ReactCrop__crop-selection::after {
+  content: '';
+  position: absolute;
+  display: block;
+  box-sizing: border-box;
+  pointer-events: none; /* Don't interfere with mouse events */
+}
+
+/* Vertical grid lines */
+.ReactCrop__crop-selection::before {
+  top: 0; bottom: 0;
+  left: 33.3333%;
+  width: 33.3333%;
+  border-left: 1px solid rgba(255, 255, 255, 0.4);
+  border-right: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+/* Horizontal grid lines */
+.ReactCrop__crop-selection::after {
+  left: 0; right: 0;
+  top: 33.3333%;
+  height: 33.3333%;
+  border-top: 1px solid rgba(255, 255, 255, 0.4);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+/* --- Modal Fade-in Animation for smoother transition --- */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.crop-modal-fade-in {
+  animation: fadeIn 0.2s ease-in-out;
+}

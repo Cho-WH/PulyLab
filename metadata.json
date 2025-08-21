@@ -1,0 +1,6 @@
+{
+  "name": "Science AI Tutor(lastest)",
+  "description": "An AI-powered assistant to help middle and high school students solve science problems. Instead of giving direct answers, it provides scaffolding and hints to guide students to their own solutions.",
+  "prompt": "",
+  "requestFramePermissions": []
+}
