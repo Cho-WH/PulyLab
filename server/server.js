@@ -92,7 +92,8 @@ app.use('/api-proxy', async (req, res, next) => {
         // Construct the target URL by taking the part of the path after /api-proxy/
         const targetPath = req.url.startsWith('/') ? req.url.substring(1) : req.url;
         const apiUrl = `${externalApiBaseUrl}/${targetPath}`;
-        console.log(`HTTP Proxy: Forwarding request to ${apiUrl}`);
+        const safeApiUrl = apiUrl.replace(/(key=)[^&]+/i, '$1REDACTED');
+        console.log(`HTTP Proxy: Forwarding request to ${safeApiUrl}`);
 
         // Prepare headers for the outgoing request
         const outgoingHeaders = {};
@@ -224,20 +225,26 @@ app.get('/', (req, res) => {
             return res.sendFile(placeholderPath);
         }
 
-        // Always inject scripts (service worker + WebSocket interceptor)
-        console.log("LOG: index.html read successfully. Injecting scripts.");
+        // Inject scripts only if not already present in the static HTML
         let injectedHtml = indexHtmlData;
+        const alreadyHasWs = injectedHtml.includes('/websocket-interceptor.js');
+        const alreadyHasSwReg = injectedHtml.includes('serviceWorker.register(');
 
+        if (alreadyHasWs || alreadyHasSwReg) {
+            console.log('LOG: index.html already includes SW/WS scripts. Skipping injection.');
+            res.send(injectedHtml);
+            return;
+        }
 
+        console.log("LOG: index.html read successfully. Injecting scripts.");
         if (injectedHtml.includes('<head>')) {
-            // Inject WebSocket interceptor first, then service worker script
             injectedHtml = injectedHtml.replace(
                 '<head>',
                 `<head>${webSocketInterceptorScriptTag}${serviceWorkerRegistrationScript}`
             );
             console.log("LOG: Scripts injected into <head>.");
         } else {
-            console.warn("WARNING: <head> tag not found in index.html. Prepending scripts to the beginning of the file as a fallback.");
+            console.warn("WARNING: <head> tag not found in index.html. Prepending scripts as a fallback.");
             injectedHtml = `${webSocketInterceptorScriptTag}${serviceWorkerRegistrationScript}${indexHtmlData}`;
         }
         res.send(injectedHtml);
@@ -246,6 +253,11 @@ app.get('/', (req, res) => {
 
 app.get('/service-worker.js', (req, res) => {
    return res.sendFile(path.join(publicPath, 'service-worker.js'));
+});
+
+// Compatibility route for static inclusion in index.html
+app.get('/websocket-interceptor.js', (req, res) => {
+   return res.sendFile(path.join(publicPath, 'websocket-interceptor.js'));
 });
 
 app.use('/public', express.static(publicPath));

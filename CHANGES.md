@@ -1,4 +1,4 @@
-# 변경 기록: 사용자 API 키 입력 전환
+# 변경 기록: 사용자 API 키 입력 전환 / Cloudflare 전환
 
 본 문서는 환경변수 기반(GEMINI_API_KEY/API_KEY)에서 "사용자 입력 API 키" 기반으로 전환한 변경사항을 요약합니다. 서버는 더 이상 환경변수 키를 사용하거나 저장하지 않으며, 브라우저에서 제공한 키만으로 프록시를 수행합니다.
 
@@ -6,6 +6,26 @@
 - 목적: ENV 의존 제거, 사용자 개인 키로 동작, 보안/투명성 강화
 - 범위: 프런트엔드(UI/상태/SDK 초기화), 서버 프록시(HTTP/WS), 서비스워커/WS 인터셉터, 빌드 설정, 문서
 - 브랜치: `feat/user-api-key-input`
+
+## 추가 변경(Cloudflare Pages + Functions 대응)
+- 정적 자산/주입 방식
+  - `index.html`: 서비스워커 등록 스니펫과 `websocket-interceptor.js`를 정적으로 포함(주입 의존 제거)
+  - 정적 파일 이관: `public/service-worker.js`, `public/websocket-interceptor.js`를 빌드 시 `dist/` 루트로 복사되도록 구성
+- 엣지 프록시(Cloudflare Functions)
+  - `functions/api-proxy/[...path].ts` 추가: HTTP 프록시 + WebSocket 업그레이드 처리
+    - API 키 결정: 헤더 `X-Goog-Api-Key` 우선, 쿼리 `key`/`api_key` 보조(없으면 401)
+    - HTTP: 쿼리의 키 파라미터 제거 후 업스트림에는 헤더로만 전달, 스트리밍 패스스루
+    - WS: `/api-proxy/**` 업그레이드 시 쿼리의 `key` 필수, 상류(`wss://generativelanguage.googleapis.com/...`)와 양방향 중계
+    - 로깅 하드닝: 키 값 미로그, 에러 사유 일반화
+- 서버(로컬/호환성) 소폭 정리
+  - `server/server.js`: 
+    - index.html에 SW/WS가 이미 포함된 경우 주입 스킵
+    - `/websocket-interceptor.js` 정적 라우트 추가(호환 경로)
+    - 프록시 대상 URL 로그에서 `key=` 값 마스킹
+- 문서
+  - `README.md`: Cloudflare Pages + Functions 배포 가이드 섹션 추가
+  - 새 문서 `docs/DEPLOY_CLOUDFLARE.md`: 초보자용 배포 절차 상세 작성
+  - `AGENTS.md`: Cloudflare 전환 계획과 구현 범위 업데이트
 
 ## 주요 변경 요약
 - 프런트엔드
@@ -28,6 +48,8 @@
   - `vite.config.ts`: 빌드타임 `process.env.*` 주입 제거
 - 문서
   - `README.md`: 사용자 키 입력 모델로 갱신, 배포/사용 안내 추가
+  - `docs/DEPLOY_CLOUDFLARE.md`: Pages+Functions 배포 가이드 추가
+  - `AGENTS.md`: 계획을 Cloudflare 전환 중심으로 교체
 
 ## 파일 변경 내역
 - 추가
@@ -75,6 +97,8 @@
 - [ ] HTTP/WS 모두 사용자 키로 동작(쿼터/권한 오류 시 친절 메시지)
 - [ ] 서버/서비스워커 로그에서 키 값 노출 없음(`REDACTED` 확인)
 - [ ] `process.env` 의존 코드가 남아 있지 않음
+ - [ ] Cloudflare 프리뷰/프로덕션에서 `/api-proxy/**` HTTP/WS 모두 정상 프록시
+ - [ ] Functions 로그/브라우저 콘솔에 키 문자열 미노출
 
 ## 후속 개선(선택)
 - 서버 패키지 정리: `dotenv` 의존성 제거(현재 미사용)
@@ -83,4 +107,3 @@
 
 ---
 본 변경은 AGENTS.md의 최신 계획(ENV 폴백 제거 포함)을 준수합니다. 추가 조정이 필요하면 본 문서를 업데이트하세요.
-
