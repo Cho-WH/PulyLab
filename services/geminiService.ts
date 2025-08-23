@@ -5,22 +5,6 @@ export function getGenAI(apiKey: string): GoogleGenAI {
   return new GoogleGenAI({ apiKey });
 }
 
-// Lightweight key validation against our same-origin proxy.
-// Returns only status truthiness to avoid exposing details.
-export async function validateApiKey(apiKey: string, opts?: { signal?: AbortSignal }): Promise<{ ok: boolean; status: number }>{
-  try {
-    const resp = await fetch('/api-proxy/v1beta/models', {
-      method: 'GET',
-      headers: { 'X-Goog-Api-Key': apiKey },
-      signal: opts?.signal,
-    });
-    return { ok: resp.ok, status: resp.status };
-  } catch {
-    // Network/abort errors: treat as failure with status 0
-    return { ok: false, status: 0 };
-  }
-}
-
 export async function analyzeProblem(apiKey: string, problem: ProblemInput, isProMode: boolean): Promise<string> {
   const model = isProMode ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
   
@@ -75,29 +59,34 @@ ${internalSolution}
 }
 
 export function getApiErrorMessage(error: unknown): string {
-  // Prefer common auth errors first
+  // The toLowerCase() check handles case-insensitivity for 'perminute' and 'perday'.
   try {
-    const source = (error as any)?.cause || error;
-    const numericStatus = (source as any)?.status || (source as any)?.response?.status;
-    if (numericStatus === 401 || numericStatus === 403) {
-      return '키가 없거나 유효하지 않습니다. 키를 확인해 주세요.';
-    }
-    const apiErrorDetails = (source as any)?.error;
-    if (apiErrorDetails?.code === 401 || apiErrorDetails?.code === 403) {
-      return '키가 없거나 유효하지 않습니다. 키를 확인해 주세요.';
-    }
+    // The actual API error from the fetch call is often nested inside the SDK's error object.
+    // We look for it in `error.cause` which is a common pattern for wrapped errors.
+    const errorSource = (error as any).cause || error;
+    const apiErrorDetails = (errorSource as any).error;
 
-    // Quota/limit specific messages
     if (apiErrorDetails?.status === 'RESOURCE_EXHAUSTED' && Array.isArray(apiErrorDetails.details)) {
       const quotaFailure = apiErrorDetails.details.find((d: any) => d['@type']?.includes('QuotaFailure'));
+      
       if (quotaFailure?.violations?.[0]?.quotaLimit) {
-        const limitType = String(quotaFailure.violations[0].quotaLimit || '').toLowerCase();
-        if (limitType.includes('perminute')) return '요청이 많습니다. 1분 후 다시 시도해 주세요.';
-        if (limitType.includes('perday')) return '일일 사용량이 소진되었습니다. 내일 다시 시도해 주세요.';
+        const limitType = quotaFailure.violations[0].quotaLimit.toLowerCase();
+        
+        if (limitType.includes('perminute')) {
+          return '죄송합니다. 요청이 몰리고 있습니다. 1분 후에 다시 시도해주세요.';
+        }
+        
+        if (limitType.includes('perday')) {
+          return '죄송합니다. 사이트의 일일 사용량이 모두 소진되었습니다. 내일 다시 시도해주세요.';
+        }
       }
     }
-  } catch {
-    // swallow parsing errors
+  } catch (parseError) {
+    // If parsing the detailed error fails, we fall through to the generic message.
+    console.error("Could not parse detailed API error:", parseError);
   }
-  return '알 수 없는 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+
+  // For all other errors that are not specific quota limits,
+  // or if parsing fails, we provide a generic fallback message as requested.
+  return '알 수 없는 API 관련 오류가 발생했습니다. 잠시 후 다시 시도해주세요. 지속된다면, 내일 다시 시도해주세요.';
 }

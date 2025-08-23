@@ -7,11 +7,9 @@ import ChatInterface from './components/ChatInterface';
 import LoadingSpinner from './components/LoadingSpinner';
 import ApiKeyModal from './components/ApiKeyModal';
 import { useApiKey } from './context/ApiKeyContext';
-import OnboardingKeyPanel from './components/OnboardingKeyPanel';
-import ApiKeyStatusBadge from './components/ApiKeyStatusBadge';
 
 function App() {
-  const { apiKey, status } = useApiKey();
+  const { apiKey, isValid } = useApiKey();
   const [appState, setAppState] = useState<AppState>(AppState.UPLOAD);
   const [isProMode, setIsProMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,9 +30,9 @@ function App() {
   };
 
   const handleProblemSubmit = useCallback(async (problem: ProblemInput) => {
-    if (status !== 'valid' || !apiKey) {
-      // 게이트: 키가 유효하지 않으면 진행하지 않음
-      setError('먼저 API 키를 등록하세요.');
+    if (!apiKey || !isValid) {
+      setError('API 키가 설정되어 있지 않습니다. 먼저 API 키를 입력해주세요.');
+      setKeyModalOpen(true);
       setAppState(AppState.ERROR);
       return;
     }
@@ -144,20 +142,17 @@ function App() {
     }
   };
 
-  // 키가 유효하지 않으면 온보딩 패널을 전면 표시
-  if (status !== 'valid') {
-    return (
-      <main className="bg-gray-100 w-full min-h-screen">
-        <OnboardingKeyPanel />
-        <ApiKeyStatusBadge onManage={() => setKeyModalOpen(true)} />
-        <ApiKeyModal isOpen={isKeyModalOpen} onClose={() => setKeyModalOpen(false)} />
-      </main>
-    );
-  }
-
   return (
-    <main className={`bg-gray-100 w-full min-h-screen flex justify-center p-4 ${appState === AppState.CHATTING ? 'items-start' : 'items-center'}`}>
-      <ApiKeyStatusBadge onManage={() => setKeyModalOpen(true)} />
+    <main className={`bg-gray-100 w-full min-h-screen flex justify-center p-4 ${
+        appState === AppState.CHATTING ? 'items-start' : 'items-center'
+    }`}>
+      <button
+        onClick={() => setKeyModalOpen(true)}
+        className="fixed bottom-4 right-4 px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg hover:bg-gray-700"
+        aria-label="API 키 설정"
+      >
+        키 설정
+      </button>
       <ApiKeyModal isOpen={isKeyModalOpen} onClose={() => setKeyModalOpen(false)} />
       {renderContent()}
     </main>
