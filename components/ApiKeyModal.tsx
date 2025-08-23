@@ -8,7 +8,7 @@ interface ApiKeyModalProps {
 }
 
 const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose }) => {
-  const { apiKey, setApiKey, clearApiKey } = useApiKey();
+  const { apiKey, setApiKey, clearApiKey, validateKey } = useApiKey();
   const [value, setValue] = useState(apiKey || '');
   const [show, setShow] = useState(false);
   const [persist, setPersist] = useState(false);
@@ -57,7 +57,7 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose }) => {
           <div className="space-x-2">
             <button onClick={onClose} className="px-4 py-2 rounded-lg border text-gray-700 hover:bg-gray-50">취소</button>
             <button
-              onClick={() => { setApiKey(value, persist); onClose(); }}
+              onClick={async () => { setApiKey(value, persist); await validateKey(); onClose(); }}
               disabled={!canSave}
               className={`px-4 py-2 rounded-lg text-white ${canSave ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-300 cursor-not-allowed'}`}
             >
@@ -71,4 +71,3 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose }) => {
 };
 
 export default ApiKeyModal;
-
