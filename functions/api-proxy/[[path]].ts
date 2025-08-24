@@ -148,13 +148,18 @@ export const onRequest: PagesFunction = async ({ request }) => {
             if (ref) {
               const instr = ref.container[ref.key];
               if (instr && Array.isArray(instr.parts) && instr.parts.length > 0 && typeof instr.parts[0]?.text === 'string') {
-                // Prepend hidden system prompt to existing text
+                // parts[0].text exists → prepend constant
                 const original = instr.parts[0].text as string;
-                const maskedLen = Math.min(original.length, 16);
                 ref.container[ref.key].parts[0].text = `${SYSTEM_PROMPT}\n\n${original}`;
-                // Avoid logging raw text; only minimal signal if needed
+              } else if (typeof instr === 'string') {
+                // String form → convert to parts with combined text
+                ref.container[ref.key] = { parts: [{ text: `${SYSTEM_PROMPT}\n\n${instr}` }] };
+              } else if (instr && typeof instr === 'object' && typeof (instr as any).text === 'string') {
+                // Object with text field → combine into parts
+                const original = (instr as any).text as string;
+                ref.container[ref.key] = { parts: [{ text: `${SYSTEM_PROMPT}\n\n${original}` }] };
               } else {
-                // Replace/create parts structure with our prompt
+                // Unknown shape → create parts with constant only
                 ref.container[ref.key] = { parts: [{ text: SYSTEM_PROMPT }] };
               }
             } else {
