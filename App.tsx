@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useRef } from 'react';
 import type { Chat } from '@google/genai';
 import { AppState, ChatMessage, ProblemInput } from './types';
-import { analyzeProblem, createChatSession, getApiErrorMessage } from './services/geminiService';
+import { analyzeProblem, createChatSession } from './services/geminiService';
+import { getApiErrorMessage } from './services/errors';
 import ProblemUploader from './components/ProblemUploader';
 import ChatInterface from './components/ChatInterface';
 import LoadingSpinner from './components/LoadingSpinner';
@@ -9,6 +10,7 @@ import ApiKeyModal from './components/ApiKeyModal';
 import { useApiKey } from './context/ApiKeyContext';
 import OnboardingKeyPanel from './components/OnboardingKeyPanel';
 import ApiKeyStatusBadge from './components/ApiKeyStatusBadge';
+import ApiKeyBanner from './components/ApiKeyBanner';
 
 function App() {
   const { apiKey, status } = useApiKey();
@@ -69,7 +71,7 @@ function App() {
       setError(`문제 분석 및 대화 시작에 실패했습니다. ${friendlyErrorMessage}`);
       setAppState(AppState.ERROR);
     }
-  }, [isProMode]);
+  }, [isProMode, status, apiKey]);
 
   const handleSendMessage = useCallback(async (messageText: string) => {
     if (!chatSessionRef.current) return;
@@ -148,6 +150,7 @@ function App() {
   if (status !== 'valid') {
     return (
       <main className="bg-gray-100 w-full min-h-screen">
+        <ApiKeyBanner onOpen={() => setKeyModalOpen(true)} />
         <OnboardingKeyPanel />
         <ApiKeyStatusBadge onManage={() => setKeyModalOpen(true)} />
         <ApiKeyModal isOpen={isKeyModalOpen} onClose={() => setKeyModalOpen(false)} />
@@ -157,6 +160,7 @@ function App() {
 
   return (
     <main className={`bg-gray-100 w-full min-h-screen flex justify-center p-4 ${appState === AppState.CHATTING ? 'items-start' : 'items-center'}`}>
+      <ApiKeyBanner onOpen={() => setKeyModalOpen(true)} />
       <ApiKeyStatusBadge onManage={() => setKeyModalOpen(true)} />
       <ApiKeyModal isOpen={isKeyModalOpen} onClose={() => setKeyModalOpen(false)} />
       {renderContent()}

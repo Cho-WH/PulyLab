@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { getMemoryKey, setMemoryKey, loadPersistedKey, persistKey } from '../services/apiKeyStore';
-import { validateApiKey } from '../services/geminiService';
+import { validateApiKey } from '../services/apiKeyValidation';
 
 export type ApiKeyStatus = 'unset' | 'checking' | 'valid' | 'invalid';
 

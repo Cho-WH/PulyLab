@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import ReactCrop, { type Crop, type PixelCrop } from 'react-image-crop';
 import type { ProblemInput } from '../types';
 import Icon from './Icon';
+import CtaGuard from './CtaGuard';
 
 interface ProblemUploaderProps {
   onProblemSubmit: (problem: ProblemInput) => void;
@@ -339,13 +340,15 @@ const ProblemUploader: React.FC<ProblemUploaderProps> = ({ onProblemSubmit, isAn
             </button>
           </div>
 
-          <button
-            onClick={handleSubmit}
-            disabled={isAnalyzing || (!text && !imageFile)}
-            className="w-full p-4 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors duration-300 flex items-center justify-center"
-          >
-            {isAnalyzing ? '분석 중...' : '풀이 시작하기'}
-          </button>
+          <CtaGuard>
+            <button
+              onClick={handleSubmit}
+              disabled={isAnalyzing || (!text && !imageFile)}
+              className="w-full p-4 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors duration-300 flex items-center justify-center"
+            >
+              {isAnalyzing ? '분석 중...' : '풀이 시작하기'}
+            </button>
+          </CtaGuard>
         </div>
       </div>
     </>

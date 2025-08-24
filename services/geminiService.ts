@@ -5,24 +5,19 @@ export function getGenAI(apiKey: string): GoogleGenAI {
   return new GoogleGenAI({ apiKey });
 }
 
-// Lightweight key validation against our same-origin proxy.
-// Returns only status truthiness to avoid exposing details.
-export async function validateApiKey(apiKey: string, opts?: { signal?: AbortSignal }): Promise<{ ok: boolean; status: number }>{
-  try {
-    const resp = await fetch('/api-proxy/v1beta/models', {
-      method: 'GET',
-      headers: { 'X-Goog-Api-Key': apiKey },
-      signal: opts?.signal,
-    });
-    return { ok: resp.ok, status: resp.status };
-  } catch {
-    // Network/abort errors: treat as failure with status 0
-    return { ok: false, status: 0 };
-  }
-}
+// --- Models
+export type GeminiModel = 'gemini-2.5-flash' | 'gemini-2.5-pro';
+export const FLASH_MODEL: GeminiModel = 'gemini-2.5-flash';
+export const PRO_MODEL: GeminiModel = 'gemini-2.5-pro';
 
-export async function analyzeProblem(apiKey: string, problem: ProblemInput, isProMode: boolean): Promise<string> {
-  const model = isProMode ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+// validateApiKey moved to services/apiKeyValidation.ts
+
+export async function analyzeProblem(apiKey: string, problem: ProblemInput, isProMode: boolean): Promise<string>;
+export async function analyzeProblem(apiKey: string, problem: ProblemInput, model: GeminiModel): Promise<string>;
+export async function analyzeProblem(apiKey: string, problem: ProblemInput, third: boolean | GeminiModel): Promise<string> {
+  const model: GeminiModel = (typeof third === 'boolean')
+    ? (third ? PRO_MODEL : FLASH_MODEL)
+    : third;
   
   const promptParts: Part[] = [
     {
@@ -55,7 +50,7 @@ export async function analyzeProblem(apiKey: string, problem: ProblemInput, isPr
   return solutionText;
 }
 
-export function createChatSession(apiKey: string, internalSolution: string): Chat {
+export function createChatSession(apiKey: string, internalSolution: string, opts?: { model?: GeminiModel }): Chat {
   const systemInstruction = `
 ## 지식 (Knowledge Base)
 이것은 학생에게 절대 보여주지 말고, 학생을 안내하는 데에만 사용해야 할 문제의 전체 풀이입니다:
@@ -66,38 +61,10 @@ ${internalSolution}
 
   const ai = getGenAI(apiKey);
   const chat = ai.chats.create({
-    model: 'gemini-2.5-flash',
+    model: opts?.model || FLASH_MODEL,
     config: {
       systemInstruction: systemInstruction,
     },
   });
   return chat;
-}
-
-export function getApiErrorMessage(error: unknown): string {
-  // Prefer common auth errors first
-  try {
-    const source = (error as any)?.cause || error;
-    const numericStatus = (source as any)?.status || (source as any)?.response?.status;
-    if (numericStatus === 401 || numericStatus === 403) {
-      return '키가 없거나 유효하지 않습니다. 키를 확인해 주세요.';
-    }
-    const apiErrorDetails = (source as any)?.error;
-    if (apiErrorDetails?.code === 401 || apiErrorDetails?.code === 403) {
-      return '키가 없거나 유효하지 않습니다. 키를 확인해 주세요.';
-    }
-
-    // Quota/limit specific messages
-    if (apiErrorDetails?.status === 'RESOURCE_EXHAUSTED' && Array.isArray(apiErrorDetails.details)) {
-      const quotaFailure = apiErrorDetails.details.find((d: any) => d['@type']?.includes('QuotaFailure'));
-      if (quotaFailure?.violations?.[0]?.quotaLimit) {
-        const limitType = String(quotaFailure.violations[0].quotaLimit || '').toLowerCase();
-        if (limitType.includes('perminute')) return '요청이 많습니다. 1분 후 다시 시도해 주세요.';
-        if (limitType.includes('perday')) return '일일 사용량이 소진되었습니다. 내일 다시 시도해 주세요.';
-      }
-    }
-  } catch {
-    // swallow parsing errors
-  }
-  return '알 수 없는 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
 }
