@@ -38,9 +38,15 @@ export async function analyzeProblem(apiKey: string, problem: ProblemInput, thir
   }
 
   const ai = getGenAI(apiKey);
+  // Ensure request shape matches API spec: contents must be an array with role
   const response = await ai.models.generateContent({
     model,
-    contents: { parts: promptParts },
+    contents: [
+      {
+        role: 'user',
+        parts: promptParts,
+      },
+    ],
   });
 
   const solutionText = response.text;
