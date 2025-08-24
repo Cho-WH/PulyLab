@@ -39,18 +39,7 @@ npm run build
 
 ---
 
-## Instructions (Cloud Run)
+## Notes (Cloudflare Pages)
 
-**Prerequisites**:
-- [Google Cloud SDK / gcloud CLI](https://cloud.google.com/sdk/docs/install)
-- Gemini API Key (입력은 브라우저에서 진행)
-
-1. Download or copy the files of your AI Studio app into this directory at the root level.
-2. Deploy to Cloud Run (no server-side API key needed):
-    ```
-    gcloud run deploy my-app --source=.
-    ```
-
-사용 방법:
-- 앱 실행 후 우측 하단의 "키 설정" 버튼으로 Gemini API 키를 입력하세요.
-- 원하면 "이 브라우저에 저장"을 선택하여 localStorage에 보관할 수 있습니다(서버에는 저장하지 않습니다).
+- Functions 프록시(`functions/api-proxy/[[path]].ts`)가 Google API 요청을 중계하고, POST/PUT/PATCH의 JSON 본문에 포함된 `system_instruction`(또는 `systemInstruction`/`config.system_instruction`)에 숨겨진 시스템 프롬프트를 자동 삽입합니다.
+- 숨겨진 시스템 프롬프트는 `functions/constants.ts`에서 관리되며, 서버 사이드에서만 사용됩니다. 키/프롬프트는 로그에 평문으로 남지 않도록 주의합니다.

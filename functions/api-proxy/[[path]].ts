@@ -1,6 +1,9 @@
 // Cloudflare Pages Functions: HTTP proxy for Google Generative Language API
 // - Requires client-provided API key via header `X-Goog-Api-Key` or query `key`/`api_key`.
+// - Injects hidden system prompt into request bodies (POST/PUT/PATCH) where applicable.
 // - Streams responses through to the client.
+
+import { SYSTEM_PROMPT } from "../constants";
 
 export const onRequest: PagesFunction = async ({ request }) => {
   try {
@@ -118,14 +121,64 @@ export const onRequest: PagesFunction = async ({ request }) => {
 
     // For GET/DELETE, do not forward a body
     const method = request.method.toUpperCase();
-    const init: RequestInit = {
-      method,
-      headers: outboundHeaders,
-      // body will be attached only for methods that can carry a body
-    };
+    const init: RequestInit = { method, headers: outboundHeaders };
+
+    // Inject system prompt for JSON bodies on methods that can carry a body
     if (!['GET', 'HEAD', 'DELETE'].includes(method)) {
-      // Cloudflare allows streaming request bodies
-      init.body = request.body;
+      const contentType = (incoming.get('content-type') || '').toLowerCase();
+      if (contentType.includes('application/json')) {
+        try {
+          const raw = await request.clone().text();
+          if (raw && raw.trim().length > 0) {
+            const body = JSON.parse(raw);
+
+            // Try to locate system instruction in common locations
+            const getInstrRef = (root: any): { container: any; key: string } | null => {
+              if (!root || typeof root !== 'object') return null;
+              if (root.system_instruction) return { container: root, key: 'system_instruction' };
+              if (root.systemInstruction) return { container: root, key: 'systemInstruction' };
+              if (root.config && typeof root.config === 'object') {
+                if (root.config.system_instruction) return { container: root.config, key: 'system_instruction' };
+                if (root.config.systemInstruction) return { container: root.config, key: 'systemInstruction' };
+              }
+              return null;
+            };
+
+            const ref = getInstrRef(body);
+            if (ref) {
+              const instr = ref.container[ref.key];
+              if (instr && Array.isArray(instr.parts) && instr.parts.length > 0 && typeof instr.parts[0]?.text === 'string') {
+                // Prepend hidden system prompt to existing text
+                const original = instr.parts[0].text as string;
+                const maskedLen = Math.min(original.length, 16);
+                ref.container[ref.key].parts[0].text = `${SYSTEM_PROMPT}\n\n${original}`;
+                // Avoid logging raw text; only minimal signal if needed
+              } else {
+                // Replace/create parts structure with our prompt
+                ref.container[ref.key] = { parts: [{ text: SYSTEM_PROMPT }] };
+              }
+            } else {
+              // No system instruction field found; create at top-level with snake_case (API default)
+              (body as any).system_instruction = { parts: [{ text: SYSTEM_PROMPT }] };
+            }
+
+            const nextJson = JSON.stringify(body);
+            outboundHeaders.set('Content-Type', 'application/json');
+            init.body = nextJson;
+          } else {
+            // Empty body: create minimal JSON with system instruction
+            const nextJson = JSON.stringify({ system_instruction: { parts: [{ text: SYSTEM_PROMPT }] } });
+            outboundHeaders.set('Content-Type', 'application/json');
+            init.body = nextJson;
+          }
+        } catch {
+          // Fallback: if parsing fails, stream original body without injection
+          init.body = request.body;
+        }
+      } else {
+        // Non-JSON content types (e.g., multipart/form-data) – do not attempt to modify
+        init.body = request.body;
+      }
     }
 
     const upstreamResp = await fetch(upstreamUrl, init);
