@@ -69,6 +69,10 @@ ${internalSolution}
     model: FLASH_MODEL,
     config: {
       systemInstruction: systemInstruction,
+      // Ensure flash chat sessions always use thinking mode
+      generationConfig: {
+        thinkingBudget: 8192,
+      },
     },
   });
   return chat;
