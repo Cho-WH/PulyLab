@@ -55,6 +55,9 @@ ${internalSolution}
     model: 'gemini-2.5-flash',
     config: {
       systemInstruction: systemInstruction,
+      generationConfig: {
+        thinkingBudget: 8192,
+      },
     },
   });
   return chat;
