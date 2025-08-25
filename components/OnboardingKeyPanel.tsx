@@ -27,10 +27,10 @@ const OnboardingKeyPanel: React.FC = () => {
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-6 border border-gray-200">
         <h1 className="text-2xl font-bold text-gray-900">Gemini API 키 등록</h1>
         <p className="mt-2 text-sm text-gray-600">
-          키는 브라우저에만 저장되며 서버/로그에 남지 않습니다.
+          키는 절대 서버에 저장되지 않지만, 무료 api 키만 등록하는 것을 권장합니다.
           <br />
           아직 키가 없다면
-          {' '}<a href="https://example.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">무료 API 발급 가이드</a>
+          {' '}<a href="https://www.youtube.com/watch?v=RVGbLSVFtIk" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">무료 API 발급 가이드</a>
           {' '}를 참고하세요.
         </p>
 
