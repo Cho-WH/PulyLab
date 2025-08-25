@@ -1,81 +1,74 @@
-# AGENTS 지침
+# AGENTS 지침 (작업 계획)
 
 - 언어는 한국어를 사용합니다.
 
-## UX 중심 코드 변경 계획: “키 먼저, 풀이 나중”
+## 목표
+- `user-api` 브랜치를 `main`과 최대한 동일한 동작 흐름으로 단순화하되, “환경변수(API_KEY)” 대신 “사용자 입력 API 키”를 사용하도록 재구성합니다.
+- Pro 토글의 의미를 `main`과 동일하게 유지합니다: 분석 모델에만 영향(`gemini-2.5-pro` vs `gemini-2.5-flash`), 채팅은 항상 `flash` 모델.
+- 에러 메시지 체계(`services/errors.ts`)는 현행 유지(이미 잘 동작)하되, 호출·흐름을 `main`과 형식적으로 맞춥니다.
 
-목표: 첫 방문 시 API 키를 먼저 등록·검증한 뒤 문제 입력/풀이를 시작하도록 사용자 흐름을 재구성한다. 키 상태를 상시 노출하고, 키가 없거나 무효인 상태에서는 주요 작업을 일관되게 차단한다. 키는 브라우저에서만 관리되고 서버/로그에 저장되지 않는다.
+## 핵심 설계 원칙
+- “서명(Signature)과 호출 위치”를 `main`과 동일하게: `geminiService.analyzeProblem(problem, isProMode)`, `geminiService.createChatSession(internalSolution)`.
+- “키 전달”만 내부화: 서비스는 `ApiKeyContext`가 유지하는 “메모리 키(store)”를 읽어 SDK 인스턴스를 생성. 컴포넌트/호출부에서 키 인자를 넘기지 않음.
+- “요청 형태”를 `main`과 동일하게: `models.generateContent({ model, contents: { parts } })` 형식(배열+role 사용하지 않음)으로 회귀.
 
-### 사용자 흐름 개요
-- 첫 방문: 풀스크린 온보딩(1단계: API 키 등록/검증 → 2단계: 문제 입력으로 이동).
-- 재방문: 저장된 키가 유효하면 즉시 메인 진입, 상단에 “키 준비됨” 배지 표시. 미설정/무효면 상단 경고 배너 노출 + 주요 CTA 비활성화.
-- 키 관리: 헤더 배지 클릭 또는 배너의 “키 등록/관리” 버튼으로 접근(보기/가리기, 교체, 삭제).
+## 변경 범위(파일별)
+- `services/geminiService.ts`
+  - 시그니처 변경: `analyzeProblem(problem, isProMode)`, `createChatSession(internalSolution)`로 통일.
+  - 내부 구현만 사용자 키를 사용: `getMemoryKey()`로 현재 키를 확보 → `new GoogleGenAI({ apiKey })` 생성 후 사용.
+  - 요청 본문은 `main`과 동일한 `contents: { parts }` 형태로 정렬.
+  - 시스템 프롬프트 삽입은 프록시가 담당하므로 여기서는 `main`과 동일하게 유지.
 
-### 변경 대상 파일(정확 경로)
-- `App.tsx`(변경): 키 상태 게이트(미설정/무효 시 온보딩 패널 전면 표시), 주요 뷰·CTA에 `ApiKeyGate` 적용.
-- `context/ApiKeyContext.tsx`(변경): 상태머신 도입(`status: 'unset' | 'checking' | 'valid' | 'invalid'`), `validateKey(apiKey)`/`setKey`/`clearKey`/`isPersisted` 제공.
-- `services/apiKeyStore.ts`(변경): 세션 메모리 기본 + 선택적 localStorage, 키 마스킹 로깅, 간단한 형식 검사 유틸.
-- `services/geminiService.ts`(변경): `getApiErrorMessage(status)` 보강(401/403 → 키 안내), 검증용 경량 호출 헬퍼 추가.
-- `components/OnboardingKeyPanel.tsx`(신규): 풀스크린 온보딩(키 입력/보기 토글/저장 옵션/검증 진행/오류 표시/성공 이동). “무료 API 발급 가이드” 하이퍼링크 포함: [무료 API 발급 가이드](https://example.com).
-- `components/ApiKeyStatusBadge.tsx`(신규): 헤더 우측 상태 배지(미설정/검증중/준비됨/오류) + 클릭 시 관리 패널 오픈.
-- `components/ApiKeyBanner.tsx`(신규): 상단 고정 배너(미설정/오류 시) + “키 등록/관리” 버튼.
-- `components/CtaGuard.tsx`(신규): `status!=='valid'`이면 children 비활성화 및 툴팁/클릭 시 온보딩 오픈.
-- `components/ApiKeyModal.tsx`(변경/축소): 초기 게이트 용도에서 “관리 전용”으로 역할 축소 또는 제거(선택).
-- `index.css`(변경): 풀스크린 온보딩/배너/배지의 기본 스타일.
-- 서버/프록시/에셋: `functions/**`, `public/service-worker.js`, `public/websocket-interceptor.js`는 기능 변화 없음(현행 유지).
+- `App.tsx`
+  - `analyzeProblem(apiKey, problem, isProMode)` → `analyzeProblem(problem, isProMode)`로 변경.
+  - `createChatSession(apiKey, solution)` → `createChatSession(solution)`로 변경.
+  - 에러 메시지는 현행처럼 `services/errors.getApiErrorMessage` 사용 유지(또는 `main`과 동일 import 경로로 얕은 정렬 가능).
+  - 나머지 흐름(첫 메시지 스트리밍·상태전이)은 `main`과 코드 수준으로 동일하게 맞춤.
 
-### 단계별 구현(무엇을 실제로 바꿀지)
-1) 상태 모델 정리
-   - `ApiKeyContext`에 `status`/`key`/`persist`/`error`/`validateKey` 추가.
-   - 마운트 시 저장 키 로드 → 즉시 `validateKey()`로 상태 전이(`checking→valid/invalid`).
+- `context/ApiKeyContext.tsx` / `services/apiKeyStore.ts`
+  - 현재 동작 유지. 키 변경 시 `setMemoryKey`로 메모리 스토어 갱신하는 기존 로직 활용.
+  - 별도 서비스 레이어에서 키를 인자로 받지 않도록 일관성 확인.
 
-2) 온보딩 패널 도입(최초 게이트)
-   - `OnboardingKeyPanel` 신설: 입력란, 보기 토글, “이 브라우저에 저장” 체크박스(기본 OFF), 진행 버튼.
-   - 보안 안내 문구 포함: “키는 브라우저에만 저장되며 서버/로그에 남지 않습니다.”
-   - 무료 발급 가이드 링크 추가: [무료 API 발급 가이드](https://example.com) (새 창, `rel="noopener noreferrer"`).
-   - 제출 시 `validateKey()` 호출 → 로딩/성공/실패 상태 UI.
+- 프록시/인터셉터(`functions/api-proxy/**`, `public/service-worker.js`, `public/websocket-interceptor.js`)
+  - 변경 없음. 현 구조를 그대로 사용(요청은 브라우저→동일 오리진 프록시로 흐름).
 
-3) 전역 노출/가드
-   - 헤더에 `ApiKeyStatusBadge` 추가, 클릭 시 키 관리 UI 열기.
-   - `ApiKeyBanner`: `status==='unset'|'invalid'`에서 상단 고정 배너 노출.
-   - 주요 CTA(“문제 풀이 시작”, 파일 업로드 등)에 `CtaGuard` 래핑.
+## 구현 단계(체크리스트)
+1) 동기화 대상 확인
+   - `main`의 `services/geminiService.ts` 구조(시그니처·모델 선택·chat 생성·첫 메시지 흐름) 재검토.
+   - `user-api`의 서비스/앱 시그니처 차이와 호출부 위치 차이를 명확화.
 
-4) 에러/메시지 보강
-   - `getApiErrorMessage`: 401/403 → “키가 없거나 유효하지 않습니다”, 기타 5xx/네트워크 → 일반화 메시지.
-   - 인라인 에러(잘못된 형식), 오프라인 시 지연 검증 안내.
+2) 서비스 시그니처 정렬
+   - `services/geminiService.ts`에서 apiKey 인자를 제거하고, `getMemoryKey()`를 통해 키를 주입.
+   - `analyzeProblem(problem, isProMode)`에서 모델 선택 로직을 `main`과 동일 구현.
+   - `createChatSession(internalSolution)`에서 채팅 모델은 항상 `gemini-2.5-flash` 고정.
 
-5) 접근성/반응형
-   - 온보딩/배너/배지에 키보드 포커스 순서/ARIA 레이블 적용, 에러는 `aria-live`로 공지.
-   - 모바일에서 온보딩 풀스크린 레이아웃 최적화.
+3) 요청 본문 정렬
+   - `models.generateContent` 호출 시 `contents: { parts }`로 `main`과 동일하게 변경.
+   - 이미지 파트 포함 로직은 `main`과 동일하게 유지.
 
-6) 최소 검증 호출 설계
-   - `validateKey`: 동일 오리진 `/api-proxy/v1beta/models`에 `X-Goog-Api-Key`로 호출(응답 본문 무시, 상태코드만 사용). 실패 시 키 평문 로깅 금지.
+4) App 호출부 정렬
+   - `App.tsx`에서 서비스 호출부의 인자 제거 및 import 정리.
+   - 첫 메시지 트리거/스트리밍/상태 전이 코드를 `main`과 동일하게 유지.
 
-7) 문구/국제화(선택)
-   - 마이크로카피 상수화(`i18n/messages.ts` 등)로 재사용 및 테스트 용이성 확보.
+5) Pro 토글 확인
+   - `ProblemUploader.tsx` 토글 → `App.tsx`의 `isProMode` → `analyzeProblem(..., isProMode)` 전파 경로 검증.
+   - 채팅은 항상 `flash`로 생성되는지 확인.
 
-### 컴포넌트 설계 요약
-- `OnboardingKeyPanel`: Step 1(키 등록/검증) → 성공 시 패널 닫고 메인 입력으로 포커스 이동.
-- `ApiKeyStatusBadge`: 색상/아이콘으로 상태 전달(미설정/검증중/준비됨/오류).
-- `ApiKeyBanner`: 짧은 안내 + “키 등록/관리” 버튼.
-- `CtaGuard`: 비활성화 상태에서 툴팁 “먼저 API 키를 등록하세요”.
+6) 에러 메시지 경로 확인
+   - `catch`에서 `services/errors.getApiErrorMessage` 사용 유지(현행 매핑 신뢰).
+   - 필요 시 `main`의 메시지를 보조적으로 참고하되, 중복 함수는 유지하지 않음(단일 소스 사용).
 
-### 상태/에러 처리 규칙
-- 초기: `unset` → 사용자가 입력/저장 시 `checking` → 200 계열이면 `valid`, 401/403이면 `invalid`.
-- 오프라인: `checking` 타임아웃 시 “오프라인 상태 — 온라인 시 자동 재확인”.
-- 삭제/교체: 저장소와 메모리에서 모두 제거 후 `unset`으로 전이.
+7) 리스크/롤백
+   - 타입 에러로 바로 검출 가능(서비스 시그니처 변경에 따른 컴파일 에러 기대).
+   - 변경 파일은 `services/geminiService.ts`, `App.tsx` 중심이므로, 문제가 생기면 두 파일만 되돌리면 됨.
 
-### 보안/프라이버시
-- 기본 세션 메모리, 저장은 명시적 opt‑in(localStorage).
-- 키/에러 로깅 시 평문 금지(마스킹), 네트워크 탭/콘솔 노출 방지.
+## 완료 기준(DoD)
+- `App.tsx`와 `services/geminiService.ts`의 시그니처·흐름이 `main`과 동일(키 인자 제외)함을 코드 레벨로 확인.
+- Pro 토글 ON 시 분석 모델만 `pro`로 전환, 채팅은 `flash` 고정.
+- 사용자 키로 정상 분석→첫 메시지 생성→채팅 전환 흐름이 재현.
+- 에러 발생 시 기존 `services/errors.ts`의 사용자 친화적 메시지가 그대로 출력됨.
 
-### 테스트 시나리오(수동)
-- 첫 방문: 온보딩 표시 → 키 등록/검증 성공 후 문제 입력 가능.
-- 잘못된/누락 키: 401/403 → 배너/배지 상태와 CTA 비활성화 확인.
-- 오프라인: 검증 실패 시 안내 유지, 온라인 전환 후 자동 재확인.
-
-### 완료 기준(DoD)
-- 키 미설정 상태에서 메인 기능이 시작되지 않고, 온보딩을 통해서만 진입.
-- 상단 배지/배너와 CTA 가드가 키 상태에 일관되게 반응.
-- 무료 API 발급 가이드 링크가 온보딩에 노출되고 동작(임시: https://example.com).
-- 키는 브라우저에서만 저장되며 서버/로그에 노출되지 않음.
+## 검증 시나리오(수동)
+- 키 등록(유효) 후 텍스트만 업로드: Flash/Pro 각각 분석 완료 → 첫 메시지 수신 및 채팅 전환.
+- 이미지 포함 업로드: Flash/Pro 각각 동일 검증.
+- 네트워크 오류/프록시 불가 상황: 기존 에러 매핑이 그대로 노출되는지 확인.

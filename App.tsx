@@ -45,10 +45,10 @@ function App() {
     setError(null);
     try {
       // 1. Get only the internal solution from the analysis model.
-      const solution = await analyzeProblem(apiKey, problem, isProMode);
+      const solution = await analyzeProblem(problem, isProMode);
 
       // 2. Create the chat session with the solution as its knowledge base.
-      chatSessionRef.current = createChatSession(apiKey, solution);
+      chatSessionRef.current = createChatSession(solution);
 
       // 3. Have the chat model generate the opening message based on its system prompt.
       // This message is a programmatic trigger, not from the user.
